@@ -31,15 +31,24 @@ class RAGService:
         )
 
         # --------------------------------
-        # 2. Create query embedding
+        # 2. Rewrite question using history
         # --------------------------------
 
-        query_embedding = self.embedding_service.embed_text(
-            question
+        standalone_question = self.llm_service.rewrite_question(
+            question=question,
+            history=history,
         )
 
         # --------------------------------
-        # 3. Retrieve relevant chunks
+        # 3. Create embedding from rewritten question
+        # --------------------------------
+
+        query_embedding = self.embedding_service.embed_text(
+            standalone_question
+        )
+
+        # --------------------------------
+        # 4. Retrieve relevant chunks
         # --------------------------------
 
         chunks = self.retriever.search(
@@ -48,7 +57,7 @@ class RAGService:
         )
 
         # --------------------------------
-        # 4. Build context
+        # 5. Build document context
         # --------------------------------
 
         context_parts = []
@@ -57,26 +66,26 @@ class RAGService:
 
             context_parts.append(
                 f"""
-Source: {chunk['chunk_id']}
-Pages: {chunk['start_page']} - {chunk['end_page']}
+    Source: {chunk['chunk_id']}
+    Pages: {chunk['start_page']} - {chunk['end_page']}
 
-{chunk['text']}
-"""
+    {chunk['text']}
+    """
             )
 
         context = "\n\n".join(context_parts)
 
         # --------------------------------
-        # 5. Generate answer
+        # 6. Generate answer
         # --------------------------------
 
         answer = self.llm_service.generate_answer(
-            question=question,
+            question=standalone_question,
             context=context,
         )
 
         # --------------------------------
-        # 6. Save user message
+        # 7. Save user message
         # --------------------------------
 
         conversation_memory.add_message(
@@ -86,7 +95,7 @@ Pages: {chunk['start_page']} - {chunk['end_page']}
         )
 
         # --------------------------------
-        # 7. Save assistant response
+        # 8. Save assistant response
         # --------------------------------
 
         conversation_memory.add_message(
@@ -98,6 +107,7 @@ Pages: {chunk['start_page']} - {chunk['end_page']}
         return {
             "session_id": session_id,
             "question": question,
+            "standalone_question": standalone_question,
             "answer": answer,
             "sources": chunks,
             "history": history,
