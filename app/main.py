@@ -5,7 +5,7 @@ from app.chunking.text_chunker import TextChunker
 from app.embeddings.embedding_service import EmbeddingService
 from app.vectorstore.chroma_store import ChromaStore
 from app.retrieval.retriever import Retriever
-from app.services.rag_service import RAGService
+from app.rag.rag_service import RAGService
 
 app = FastAPI(
     title="PDF RAG Agent",
@@ -167,12 +167,15 @@ def search(query: str, top_k: int = 5):
 @app.get("/ask")
 def ask_question(
     question: str,
+    session_id: str,
     top_k: int = 5,
 ):
+
     rag_service = RAGService()
 
     result = rag_service.answer(
         question=question,
+        session_id=session_id,
         top_k=top_k,
     )
 

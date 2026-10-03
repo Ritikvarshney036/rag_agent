@@ -1,28 +1,28 @@
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 from app.config import settings
 
 
 class LLMService:
     """
-    Generates answers using the retrieved document context.
+    Generates answers using LangChain.
     """
 
     def __init__(self):
-        self.client = OpenAI(
+
+        self.llm = ChatOpenAI(
+            model=settings.CHAT_MODEL,
             api_key=settings.OPENAI_API_KEY,
-            base_url="https://api.euron.one/api/v1/euri"
+            base_url="https://api.euron.one/api/v1/euri",
+            temperature=0,
         )
 
-        self.model = settings.CHAT_MODEL
-
-    def generate_answer(
-        self,
-        question: str,
-        context: str,
-    ) -> str:
-
-        system_prompt = """
+        self.prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                """
 You are a helpful question-answering assistant.
 
 Answer the user's question using ONLY the provided context.
@@ -34,8 +34,10 @@ Rules:
 - Do not make up information.
 - Give a clear and concise answer.
 """
-
-        user_prompt = f"""
+            ),
+            (
+                "human",
+                """
 Context:
 ----------------
 {context}
@@ -44,19 +46,24 @@ Context:
 Question:
 {question}
 """
+            )
+        ])
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
+        self.chain = (
+            self.prompt
+            | self.llm
+            | StrOutputParser()
         )
 
-        return response.choices[0].message.content
+    def generate_answer(
+        self,
+        question: str,
+        context: str,
+    ) -> str:
+
+        answer = self.chain.invoke({
+            "question": question,
+            "context": context,
+        })
+
+        return answer
