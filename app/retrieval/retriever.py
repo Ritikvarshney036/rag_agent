@@ -3,6 +3,7 @@ import chromadb
 from langchain_core.documents import Document
 
 from app.config import settings
+from app.retrieval.reranker import Reranker
 
 
 class Retriever:
@@ -12,6 +13,7 @@ class Retriever:
     """
 
     def __init__(self):
+
         self.client = chromadb.PersistentClient(
             path=settings.CHROMA_DB_PATH
         )
@@ -19,6 +21,8 @@ class Retriever:
         self.collection = self.client.get_collection(
             name="pdf_documents"
         )
+
+        self.reranker = Reranker()
 
     def search(
         self,
@@ -59,20 +63,46 @@ class Retriever:
 
         return retrieved_chunks
 
+    def search_with_reranking(
+        self,
+        query: str,
+        query_embedding: list[float],
+        retrieval_k: int = 10,
+        top_k: int = 5,
+    ) -> list[dict]:
+
+        # Stage 1: Vector retrieval
+
+        chunks = self.search(
+            query_embedding=query_embedding,
+            top_k=retrieval_k,
+        )
+
+        # Stage 2: Reranking
+
+        reranked_chunks = self.reranker.rerank(
+            query=query,
+            chunks=chunks,
+            top_k=top_k,
+        )
+
+        return reranked_chunks
+
     def search_documents(
-            self, 
-            query_embedding: list[float],
-            top_k: int = 5,
+        self,
+        query_embedding: list[float],
+        top_k: int = 5,
     ) -> list[Document]:
 
         chunks = self.search(
             query_embedding=query_embedding,
-            top_k=top_k
+            top_k=top_k,
         )
 
         documents = []
 
         for chunk in chunks:
+
             documents.append(
                 Document(
                     page_content=chunk["text"],
@@ -81,7 +111,8 @@ class Retriever:
                         "start_page": chunk["start_page"],
                         "end_page": chunk["end_page"],
                         "distance": chunk["distance"],
-                    }
+                    },
                 )
             )
+
         return documents
